@@ -1,0 +1,165 @@
+=================== 1. Estado de contenedores ===================
+NAME            STATUS                    PORTS
+bff-cajero      Up 33 minutes             0.0.0.0:8083->8083/tcp, [::]:8083->8083/tcp
+bff-mobile      Up 33 minutes             0.0.0.0:8082->8082/tcp, [::]:8082->8082/tcp
+bff-web         Up 33 minutes             0.0.0.0:8081->8081/tcp, [::]:8081->8081/tcp
+config-server   Up 34 minutes (healthy)   0.0.0.0:8888->8888/tcp, [::]:8888->8888/tcp
+core-service    Up 52 seconds             0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+eureka-server   Up 34 minutes (healthy)   0.0.0.0:8761->8761/tcp, [::]:8761->8761/tcp
+kafka           Up 34 minutes (healthy)   0.0.0.0:9092->9092/tcp, [::]:9092->9092/tcp
+keycloak        Up 5 minutes (healthy)    0.0.0.0:8180->8180/tcp, [::]:8180->8180/tcp
+postgres        Up 35 minutes (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+zookeeper       Up 34 minutes             2181/tcp, 2888/tcp, 3888/tcp
+
+=================== 2. Eureka: servicios registrados ===================
+   BFF-MOBILE -> ['a0a8746e41d2:bff-mobile:8082 UP']
+   BFF-WEB -> ['1846c545724e:bff-web:8081 UP']
+   CORE-SERVICE -> ['d3d509bca48e:core-service:8080 UP']
+   BFF-CAJERO -> ['8fa248fab272:bff-cajero:8083 UP']
+
+=================== 3. Config Server: config servida a core-service ===================
+   classpath:/config-repo/core-service.yml
+
+=================== 4. OAuth2 (Keycloak) ===================
+--- Sin token -> debe ser 401
+$ curl -o /dev/null http://localhost:8081/web/transacciones
+
+  -> HTTP 401
+
+--- Token invalido -> debe ser 401
+$ curl -o /dev/null -H Authorization: Bearer <JWT> http://localhost:8081/web/cuentas/101
+
+  -> HTTP 401
+
+--- Tokens JWT obtenidos (grant_type=password):
+  iss = http://keycloak:8180/realms/bancoxyz | usuario = usuario.web | roles = ['canal-web']
+  iss = http://keycloak:8180/realms/bancoxyz | usuario = usuario.mobile | roles = ['canal-mobile']
+  iss = http://keycloak:8180/realms/bancoxyz | usuario = cajero.atm001 | roles = ['canal-cajero']
+--- Credenciales incorrectas -> invalid_grant
+{"error":"invalid_grant","error_description":"Invalid user credentials"}
+--- Client Credentials (M2M):
+  token_type = Bearer | expires_in = 3600
+
+=================== 5. BFF Web (8081) ===================
+$ curl -H Authorization: Bearer <JWT> http://localhost:8081/web/cuentas/101
+{"cuentaId":101,"nombre":"Charlie Green","edad":100,"tipoCuenta":"prestamo","saldoInicial":8000.00,"saldoFinal":7770.00,"anomalia":false,"movimientos":[{"fecha":"2024-12-26","tipoOperacion":"deposito","monto":0.00,"descripcion":"Sin descripcion","anomalia":true},{"fecha":"2024-12-22","tipoOperacion":"deposito","monto":2500.00,"descripcion":"Ingreso navideño","anomalia":false},{"fecha":"2024-11-24","tipoOperacion":"deposito","monto":0.00,"descripcion":"Sin descripcion","anomalia":true},{"fecha":"2024-11-23","tipoOperacion":"compra","monto":1500.00,"descripcion":"Compra en tienda","anomalia":false},{"fecha":"2024-11-22","tipoOperacion":"retiro","monto":1000.00,"descripcion":"Sin descripcion", ... (5323 caracteres, recortado)
+  -> HTTP 200
+
+$ curl -H Authorization: Bearer <JWT> http://localhost:8081/web/transacciones
+[{"transaccionId":251,"fecha":"2024-07-14","monto":-200.00,"tipo":"debito","anomalia":true},{"transaccionId":1,"fecha":"2024-06-30","monto":3000.00,"tipo":"credito","anomalia":false},{"transaccionId":501,"fecha":"2024-03-24","monto":0.00,"tipo":"credito","anomalia":true},{"transaccionId":751,"fecha":"2024-11-13","monto":3000.00,"tipo":"desconocido","anomalia":true},{"transaccionId":252,"fecha":"2024-05-25","monto":700.00,"tipo":"debito","anomalia":false},{"transaccionId":2,"fecha":"2024-04-03","monto":1200.00,"tipo":"credito","anomalia":false},{"transaccionId":752,"fecha":"2024-05-02","monto":0.00,"tipo":"desconocido","anomalia":true},{"transaccionId":502,"fecha":"2024-02-10","monto":-100.00 ... (87592 caracteres, recortado)
+  -> HTTP 200
+
+=================== 6. BFF Mobile (8082) ===================
+$ curl -H Authorization: Bearer <JWT> http://localhost:8082/mobile/cuentas/101/resumen
+{"cuentaId":101,"nombre":"Charlie Green","tipoCuenta":"prestamo","saldoActual":7770.00}
+  -> HTTP 200
+
+$ curl -H Authorization: Bearer <JWT> http://localhost:8082/mobile/cuentas/101/movimientos?limite=3
+[{"fecha":"2024-12-26","tipo":"deposito","monto":0.00},{"fecha":"2024-12-22","tipo":"deposito","monto":2500.00},{"fecha":"2024-11-24","tipo":"deposito","monto":0.00}]
+  -> HTTP 200
+
+--- Cuenta inexistente -> 404 (no abre el Circuit Breaker)
+$ curl -H Authorization: Bearer <JWT> http://localhost:8082/mobile/cuentas/99999/resumen
+{"timestamp":"2026-10-05T22:32:27.669+00:00","status":404,"error":"Not Found","path":"/mobile/cuentas/99999/resumen"}
+  -> HTTP 404
+
+=================== 7. BFF Cajero (8083) + Kafka ===================
+$ curl -H Authorization: Bearer <JWT> http://localhost:8083/cajero/cuentas/101/saldo
+{"cuentaId":101,"saldoDisponible":7770.00}
+  -> HTTP 200
+
+$ curl -X POST -H Authorization: Bearer <JWT> -H Content-Type: application/json -d {"monto": 50.00} http://localhost:8083/cajero/cuentas/101/retiro
+{"cuentaId":101,"estado":"APROBADO","saldoActual":7720.00,"mensaje":"Retiro procesado exitosamente."}
+  -> HTTP 200
+
+$ curl -X POST -H Authorization: Bearer <JWT> -H Content-Type: application/json -d {"monto": 99999999} http://localhost:8083/cajero/cuentas/101/retiro
+{"cuentaId":101,"estado":"RECHAZADO","saldoActual":null,"mensaje":"Saldo insuficiente."}
+  -> HTTP 200
+
+$ curl -H Authorization: Bearer <JWT> http://localhost:8083/cajero/cuentas/101/saldo
+{"cuentaId":101,"saldoDisponible":7720.00}
+  -> HTTP 200
+
+--- Mensajes en topic bancoxyz.retiros (kafka-console-consumer):
+{"cuentaId":101,"monto":50.00,"saldoAnterior":8120.00,"saldoNuevo":8070.00,"timestamp":1791237561.587008682}
+{"cuentaId":101,"monto":100.00,"saldoAnterior":8070.00,"saldoNuevo":7970.00,"timestamp":1791238535.193907391}
+{"cuentaId":105,"monto":25.00,"saldoAnterior":10020.00,"saldoNuevo":9995.00,"timestamp":1791238542.556499817}
+{"cuentaId":101,"monto":100.00,"saldoAnterior":7970.00,"saldoNuevo":7870.00,"timestamp":1791238889.214948657}
+{"cuentaId":105,"monto":25.00,"saldoAnterior":9995.00,"saldoNuevo":9970.00,"timestamp":1791238897.373310127}
+{"cuentaId":101,"monto":100.00,"saldoAnterior":7870.00,"saldoNuevo":7770.00,"timestamp":1791239392.820063916}
+{"cuentaId":105,"monto":25.00,"saldoAnterior":9970.00,"saldoNuevo":9945.00,"timestamp":1791239400.747344490}
+{"cuentaId":101,"monto":50.00,"saldoAnterior":7770.00,"saldoNuevo":7720.00,"timestamp":1791239547.989558155}
+--- Log del productor y consumidor en core-service:
+2026-10-05T22:30:00.747Z  INFO 1 --- [core-service] [nio-8080-exec-6] c.b.core.kafka.RetiroEventProducer       : Evento de retiro publicado en topic=bancoxyz.retiros cuentaId=105 monto=25.00
+2026-10-05T22:30:00.751Z  INFO 1 --- [core-service] [ntainer#0-0-C-1] c.b.core.kafka.RetiroEventConsumer       : [KAFKA] Retiro procesado: cuentaId=105 monto=25.00 saldoAnterior=9970.00 saldoNuevo=9945.00 ts=2026-10-05T22:30:00.747344490Z
+2026-10-05T22:32:28.051Z  INFO 1 --- [core-service] [nio-8080-exec-3] c.b.core.kafka.RetiroEventProducer       : Evento de retiro publicado en topic=bancoxyz.retiros cuentaId=101 monto=50.00
+2026-10-05T22:32:28.081Z  INFO 1 --- [core-service] [ntainer#0-0-C-1] c.b.core.kafka.RetiroEventConsumer       : [KAFKA] Retiro procesado: cuentaId=101 monto=50.00 saldoAnterior=7770.00 saldoNuevo=7720.00 ts=2026-10-05T22:32:27.989558155Z
+
+=================== 8. Resilience4j: Circuit Breaker ===================
+--- Estado inicial:
+{
+    "circuitBreakers": {
+        "core": {
+            "failureRate": "-1.0%",
+            "slowCallRate": "-1.0%",
+            "failureRateThreshold": "50.0%",
+            "slowCallRateThreshold": "100.0%",
+            "bufferedCalls": 3,
+            "failedCalls": 0,
+            "slowCalls": 0,
+            "slowFailedCalls": 0,
+            "notPermittedCalls": 0,
+            "state": "CLOSED"
+        }
+    }
+}
+--- Se detiene core-service (simula caida)
+  llamada 1: HTTP 503 (2.016234s)
+  llamada 2: HTTP 503 (2.012327s)
+  llamada 3: HTTP 503 (2.030128s)
+  llamada 4: HTTP 503 (0.006902s)
+  llamada 5: HTTP 503 (0.014973s)
+  llamada 6: HTTP 503 (0.008577s)
+--- Estado con core caido (debe estar OPEN):
+{
+    "circuitBreakers": {
+        "core": {
+            "failureRate": "60.0%",
+            "slowCallRate": "0.0%",
+            "failureRateThreshold": "50.0%",
+            "slowCallRateThreshold": "100.0%",
+            "bufferedCalls": 5,
+            "failedCalls": 3,
+            "slowCalls": 0,
+            "slowFailedCalls": 0,
+            "notPermittedCalls": 3,
+            "state": "OPEN"
+        }
+    }
+}
+--- Retry en BFF Cajero (3 intentos antes del fallback):
+  HTTP 503 (5.522670s)
+   22:33:03.284 RETRY intento 1 - org.springframework.web.server.ResponseStatusException: 503 SERVICE_UN
+   22:33:05.289 RETRY intento 2 - org.springframework.web.server.ResponseStatusException: 503 SERVICE_UN
+   22:33:05.792 ERROR intento 3 - org.springframework.web.server.ResponseStatusException: 503 SERVICE_UN
+--- Se levanta core-service nuevamente
+  llamada 1: HTTP 200
+  llamada 2: HTTP 200
+  llamada 3: HTTP 200
+--- Estado tras recuperacion (HALF_OPEN -> CLOSED):
+{
+    "circuitBreakers": {
+        "core": {
+            "failureRate": "-1.0%",
+            "slowCallRate": "-1.0%",
+            "failureRateThreshold": "50.0%",
+            "slowCallRateThreshold": "100.0%",
+            "bufferedCalls": 1,
+            "failedCalls": 0,
+            "slowCalls": 0,
+            "slowFailedCalls": 0,
+            "notPermittedCalls": 0,
+            "state": "CLOSED"
+        }
+    }
+}

@@ -1,0 +1,12 @@
+# Artefactos de compilacion (se generan con: mvn clean package -DskipTests)
+target/
+*.class
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Temporales
+evidencia/_html_tmp/

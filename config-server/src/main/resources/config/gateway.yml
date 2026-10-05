@@ -1,0 +1,34 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8080/realms/bancoxyz
+  cloud:
+    gateway:
+      routes:
+        - id: bff-web-route
+          uri: http://bff-web:8081
+          predicates:
+            - Path=/web/**
+        - id: bff-mobile-route
+          uri: http://bff-mobile:8082
+          predicates:
+            - Path=/mobile/**
+        - id: bff-cajero-route
+          uri: http://bff-cajero:8083
+          predicates:
+            - Path=/cajero/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

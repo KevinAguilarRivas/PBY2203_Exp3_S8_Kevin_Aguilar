@@ -1,0 +1,95 @@
+{
+  "realm": "bancoxyz",
+  "enabled": true,
+  "displayName": "Banco XYZ",
+  "attributes": {
+    "frontendUrl": "http://keycloak:8180"
+  },
+  "accessTokenLifespan": 3600,
+  "clients": [
+    {
+      "clientId": "bancoxyz-app",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bancoxyz-secret-2026",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:*/*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "usuario.web",
+      "enabled": true,
+      "email": "usuario.web@bancoxyz.cl",
+      "emailVerified": true,
+      "firstName": "Usuario",
+      "lastName": "Web",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "web123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "canal-web"
+      ]
+    },
+    {
+      "username": "usuario.mobile",
+      "enabled": true,
+      "email": "usuario.mobile@bancoxyz.cl",
+      "emailVerified": true,
+      "firstName": "Usuario",
+      "lastName": "Mobile",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "mobile123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "canal-mobile"
+      ]
+    },
+    {
+      "username": "cajero.atm001",
+      "enabled": true,
+      "email": "cajero.atm001@bancoxyz.cl",
+      "emailVerified": true,
+      "firstName": "Cajero",
+      "lastName": "ATM001",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "cajero123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "canal-cajero"
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "canal-web"
+      },
+      {
+        "name": "canal-mobile"
+      },
+      {
+        "name": "canal-cajero"
+      }
+    ]
+  }
+}

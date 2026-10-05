@@ -1,0 +1,57 @@
+server:
+  port: 8083
+
+core-service:
+  url: http://core-service:8080
+
+cajero:
+  id: ATM-001
+  secret: cajero-2026-secret
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8180/realms/bancoxyz
+
+kafka:
+  bootstrap-servers: kafka:9092
+  topic:
+    retiro: bancoxyz.retiros
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      core:
+        registerHealthIndicator: true
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException
+  retry:
+    instances:
+      core:
+        maxAttempts: 3
+        waitDuration: 500ms
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException
+
+# Expone el estado de Resilience4j via Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,circuitbreakerevents,retries,retryevents
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    com.bancoxyz.bff.cajero: INFO

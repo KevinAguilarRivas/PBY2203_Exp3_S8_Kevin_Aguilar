@@ -1,0 +1,41 @@
+server:
+  port: 8081
+
+core-service:
+  url: http://core-service:8080
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8180/realms/bancoxyz
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      core:
+        registerHealthIndicator: true
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException
+
+# Expone el estado de Resilience4j via Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,circuitbreakerevents
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    com.bancoxyz.bff.web: INFO

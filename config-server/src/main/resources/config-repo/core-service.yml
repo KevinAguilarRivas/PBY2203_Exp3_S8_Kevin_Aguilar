@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/bancoxyz
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+  # Consumidor Kafka (@KafkaListener de RetiroEventConsumer)
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: core-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.bancoxyz.core.event
+        spring.json.value.default.type: com.bancoxyz.core.event.RetiroEvent
+
+kafka:
+  bootstrap-servers: kafka:9092
+  topic:
+    retiro: bancoxyz.retiros
+    transaccion: bancoxyz.transacciones
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      cuentas:
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+  retry:
+    instances:
+      cuentas:
+        maxAttempts: 3
+        waitDuration: 500ms
+
+logging:
+  level:
+    com.bancoxyz.core: INFO
